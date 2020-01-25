@@ -1,0 +1,27 @@
+{
+  "name": "citrus-dev-server",
+  "version": "1.0.0",
+  "description": "A very simple dev server with lots of comments - for education purposes",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/code-citrus/citrus-dev-server.git"
+  },
+  "author": "Gautham",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/code-citrus/citrus-dev-server/issues"
+  },
+  "homepage": "https://github.com/code-citrus/citrus-dev-server#readme",
+  "devDependencies": {
+    "eslint": "^6.8.0",
+    "eslint-config-airbnb-base": "^14.0.0",
+    "eslint-plugin-import": "^2.20.0"
+  },
+  "dependencies": {
+    "chokidar": "^3.3.1"
+  }
+}
