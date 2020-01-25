@@ -1,29 +1,52 @@
 /* eslint-disable no-console */
 
-// Next step:
-// This implementation does watch "server.js", which is the
-// top level file assumed to export the express application.
-// However, the express application is passed in as an actual
-// argument to citrus(). This means that though we restart
-// the app, it will still be the old in-memory app.
-// The solution will require us to re-require the server.js
-// file before starting the app again w/ app.listen...
+// Updates:
+// With this commit, we re-require the app module when
+// the dev-server needs to be restarted - as opposed to
+// passing int he express app object explictly.
+// This also allows us to launch the dev server from CLI.
 
+// Next Steps:
+// - Allow name of app module to be configurable
+// - Implement asset pipeline for SASS
+// - Ignore node_modules directory when cleaning the cache.
+// - Chokidar fires evens twice sometimes (mayb wait for updates to stop before restarting)
+
+const path = require('path');
 const chokidar = require('chokidar');
 
 const log = console.log.bind(console);
 const debug = console.debug.bind(console);
 
 const state = {
-    app: null,
     server: null,
     sockets: [],
 };
 
-function start(app) {
-    // Express app.listen will return an http.Server object.
-    // Whenever a new connection is made, we save the net.Socket
-    // object into state so we can close it out later.
+function cleanRequireCache() {
+    let counter = 0;
+    Object.keys(require.cache).forEach((id) => {
+        counter += 1;
+        delete require.cache[id];
+    });
+    debug(`cleaned ${counter} entries from module cache`);
+}
+
+function closeExistingConnections() {
+    state.sockets.forEach((socket) => {
+        if (socket.destroyed === false) {
+            socket.destroy();
+        }
+    });
+    state.sockets = [];
+}
+
+function start() {
+    // re-import latest code. Does this get transitive deps?
+    const appModule = path.join(process.cwd(), 'server.js');
+    const app = require(appModule); // eslint-disable-line
+
+    // start server & keep handle to open connections
     state.server = app.listen(3000, () => debug('dev-server started'));
     state.server.on('connection', (socket) => {
         debug(`Adding socket ${state.sockets.length}`);
@@ -34,32 +57,34 @@ function start(app) {
 function restart() {
     log('restarting');
 
-    // After calling server.close(), the server will still run until
-    // existing connections close. So, pre-emptively close out our
-    // existing connections.
-    state.sockets.forEach((socket) => {
-        if (socket.destroyed === false) {
-            socket.destroy();
-        }
-    });
-    state.sockets = [];
+    // clean module cache so we get latest code on re-import
+    cleanRequireCache();
 
-    // After closing, restart the app
-    state.server.close(() => {
-        log('server closed. restarting...');
-        start(state.app);
-    });
+    // multiple restart() calls shouldn't queue up restarts!
+    if (state.server) {
+        closeExistingConnections();
+        state.server.close(() => {
+            debug('server closed');
+            start();
+        });
+        state.server = null;
+    }
+
+    // on exit, state.server is null but server could
+    // still be shutting down. The cache is clean.
 }
 
-function citrus(app) {
-    state.app = app;
+function citrus() {
     const watcher = chokidar.watch([
         './scss',
         './views',
         './server.js',
     ]);
-    watcher.on('ready', () => { start(app); });
-    watcher.on('change', () => { restart(); });
+    watcher.on('ready', () => { debug('READY'); start(); });
+    watcher.on('change', (fp) => {
+        debug(`FILE CHANGED: ${fp}`);
+        restart();
+    });
 }
 
 module.exports = citrus;
